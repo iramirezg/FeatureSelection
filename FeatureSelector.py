@@ -4,100 +4,20 @@
 # Created on Fri Nov 19 11:53:47 2021
 
 # @author: iramirezg@mondraon.edu
-# """
-# #!/usr/bin/env python3
-# # -*- coding: utf-8 -*-
-# """
-# Created on Mon Nov 15 10:35:44 2021
-
-# @author: iramirezg
-# """
 
 import pandas as pd
 import numpy as np
-from datetime import datetime
-import seaborn as sb
 import sys
-import time
 
-startTime = time.time()
-
-startTime_ns = time.time_ns()
-
-delta_T=60 #sampling rate, mins! -> 60 mins?
-# --------------------
-# DATA READ
-# --------------------
-filename = "/home/iramirezg/Dropbox (MGEP)/Datasets/PowerDelivery/m60t1fUTC.csv" #FIRST FILE
-execution_date = datetime.now()
-result_dir = '' #'results/EAAI/'
-data = pd.read_csv(filename,parse_dates=['DateTime'])
-data.set_index(['DateTime'])
-data = data.rename(columns={'water':'Moisture in top oil','Tamb':'Ambient temperature'})
 target = 'TOT' 
-features = list(data.keys())
-#Adostutakoak kendu
-features.remove('DateTime')
-features.remove('TOT')
-features.remove('Unnamed: 0')
-#features.remove('Unnamed: 0.1')
-features.remove('press')
-#features.remove('water')
-features.remove('moist')
-features.remove('100 metre V wind component')
-features.remove('Large-scale precipitation fraction')
-#100 metre V wind component
-#features_iec = list(['Load','Tamb']) 
-#features_custom = list(['Load','Tamb','fdir']) #
+result = pd.read_csv("tmp.csv",parse_dates=['DateTime'])
 
-from scipy.stats import pearsonr
-import matplotlib.pyplot as plt
-from sklearn.metrics import mean_squared_error
+#result = dt_data
 
-data.dropna(axis='rows',how='any',inplace=True)
-
-dt_data = data.loc[data['DateTime'].between('2018-11-30','2019-02-03')] #BEST
-
-dt_data.to_csv("tmp.csv",index=False)
-dt_data = pd.read_csv("tmp.csv",parse_dates=['DateTime'])
-
-result = dt_data
-
-featuresPR = list()
-
-LoadColumn = np.zeros(len(features))
-for f in features:
-    LoadColumn[features.index(f)],pp = pearsonr(dt_data['Ambient temperature'],dt_data[f])
-#LoadCorrDF = pd.DataFrame(LoadCorr)
-LoadCorr = pd.DataFrame(features)
-LoadCorr['r'] = LoadColumn
-
-LoadCorr = LoadCorr.sort_values('r',ascending=False)
-
-fig,ax = plt.subplots(figsize=(22,20))
-varFC = {}
-#for var in selected_mix_features:
-for var in LoadCorr[0]:
-    varFC[var] = dt_data[var] #[x]result[var]
-df = pd.DataFrame(varFC)
-corr = df.corr()
-lbs = list()
-for col in corr.columns:
-    lbs.append(col)
-for f in features:
-    corr[f][f] = np.nan
-
-axhm = sb.heatmap(corr, cmap='coolwarm',yticklabels=lbs) #cbar_ax=cbar_ax)
-
-ax_colours=['black']*len(features)
-for f in features:
-    if f in featuresPR:
-        ax_colours[features.index(f)]='red'
-#pylab.show()
-[t.set_color(i) for (i,t) in zip(ax_colours,axhm.xaxis.get_ticklabels())]
-#axhm.set_xticklabels(lbs,color=ax_colours)
-fig.tight_layout()
-plt.savefig('heatmapAU.svg',bbox_inches='tight',dpi=1200,format='svg')
+analytic_features = list()
+analytic_features.append('Load')
+analytic_features.append('Ambient temperature')
+analytic_features.append('Moisture in top oil')
 
 #BEGIN FEATURE SELECTION
 from sklearn.datasets import make_regression
@@ -109,7 +29,6 @@ from sklearn.ensemble import GradientBoostingRegressor
 from sklearn.ensemble import AdaBoostRegressor
 from sklearn.preprocessing import StandardScaler
 from sklearn.feature_selection import RFE
-#from sklearn.model_selection import KFold , StratifiedKFold #,RepeatedKFold, RepeatedStratifiedKFold, cross_val_score
 from sklearn.metrics import mean_squared_error
 
 import warnings
@@ -146,7 +65,6 @@ class FeatureSelector:
         self.features = list(self.X.keys())
         self.features.remove(self.target)
         self.anft = list()
-        #self.selected_features = list()
         self.REPEAT_TIME = 3
         if anal_feat is not None:
             for feat in anal_feat:
@@ -156,7 +74,6 @@ class FeatureSelector:
     def CorrelationAnalysis(self,correlationThreshold=0.9):
         featuresPR = list()
         removed_features = list()
-        #features_copy = self.features.copy()
         from scipy.stats import pearsonr
         for feat in self.features:
             for featu in self.features[self.features.index(feat):]:
@@ -177,8 +94,6 @@ class FeatureSelector:
         min_ranking = 0.0
         self.selected_features = list()
         scores = list()
-        #scores_a = np.zeros((len(self.features)))
-        #n_features = {}
         X, y = make_regression(n_samples=len(result), n_features=len(self.features))
         for var in range(len(self.features)):
             X[:, var] = self.X[self.features[var]][:]
@@ -190,7 +105,7 @@ class FeatureSelector:
         else:
             SX = X
         X_train, X_test, y_train, y_test = train_test_split(SX, y, train_size=train_size, shuffle=False)
-        for i in range(5): #self.REPEAT_TIME):
+        for i in range(self.REPEAT_TIME):
             if param is None:
                 model_est = self.model()
             else:
@@ -210,7 +125,6 @@ class FeatureSelector:
             
         for i in range(len(self.features)):
             s = sum(scores[:])
-            #s_max = max(s)
             self.pToBeSelected[i] = 1.0 - ((s[i]-min_ranking)/max_ranking)
         n_values = 0
         self.threshold = 0
@@ -239,11 +153,7 @@ class FeatureSelector:
             self.param = param
         X, y = make_regression(n_samples=len(self.X), n_features=len(self.selected_features))
         for var in range(len(self.selected_features)):
-            #print('add var : ', self.selected_features[var])
             X[:, var] = self.X[ self.features[ self.selected_features[var] ] ][:]
-            #for x in range(len(self.X)):
-            #    X[x, var] = self.X[ self.features[ self.selected_features[var] ] ][x]
-        #for x in range(len(self.X)):
         y[:] = self.X[target][:]
         make_data_standard = True
         if make_data_standard:
@@ -264,9 +174,7 @@ class FeatureSelector:
         self.grid_params = list()
         X, y = make_regression(n_samples=len(self.X), n_features=len(self.selected_features))
         for var in range(len(self.selected_features)):
-            #for x in range(len(self.X)):
             X[:, var] = self.X[ self.features[ self.selected_features[var] ] ][:]
-        #for x in range(len(self.X)):
         y[:] = self.X[target][:]
         make_data_standard = True
         if make_data_standard:
@@ -297,15 +205,7 @@ class FeatureSelector:
             print(self.features[feature], ' p:',
                   self.pToBeSelected[feature])
         
-analytic_features = list()
-analytic_features.append('Load')
-analytic_features.append('Ambient temperature')
-analytic_features.append('Moisture in top oil')
-del result['DateTime']
-del result['press']
-del result['moist']
-del result['100 metre U wind component']
-del result['Unnamed: 0']
+del result['DateTime']  #Meaningless data variable.
 featSel = FeatureSelector(result,target='TOT',anal_feat=analytic_features)
 
 featSel.CorrelationAnalysis()
@@ -314,7 +214,8 @@ featSel.printSF()
 model, pred = featSel.TrainModel()
 params = featSel.GridSearch(param_grid[RandomForestRegressor.__name__])
 model, pred = featSel.TrainModel(param=params)
-#featSel.printANFT()
+removedFeatures = featSel.FeatureSelection(0.5,param=params)
+featSel.printSF()
 
 sys.exit(0)
 print('###################################################')
