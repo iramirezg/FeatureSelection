@@ -13,7 +13,6 @@ from sklearn.tree import DecisionTreeRegressor #base_estimator__ for AdaBoostReg
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.ensemble import GradientBoostingRegressor
 from sklearn.ensemble import AdaBoostRegressor
-from sklearn.preprocessing import StandardScaler
 from sklearn.feature_selection import RFE #Gives the order of elimination and handles recursivity
 from sklearn.metrics import mean_squared_error #MSE
 
@@ -25,7 +24,7 @@ class FeatureSelector:
         self.features = list(self.X.keys())
         self.features.remove(self.target)
         self.anft = list()
-        self.REPEAT_TIME = 5    #Times to repeat FeatureSelection or HyperparameterTuning process.
+        self.REPEAT_TIME = 100    #Times to repeat FeatureSelection or HyperparameterTuning process. More is best.
         if anal_feat is not None:
             for feat in anal_feat:
                 if feat in self.X.keys():
@@ -58,12 +57,6 @@ class FeatureSelector:
         for var in range(len(self.features)):
             X[:, var] = self.X[self.features[var]][:]
         y[:] = self.X[target][:]
-        make_data_standard = False
-        if make_data_standard:
-            scaler=StandardScaler()
-            SX = scaler.fit_transform(X, y)
-        else:
-            SX = X
         X_train, X_test, y_train, y_test = train_test_split(X, y, train_size=train_size, shuffle=False)
         for i in range(self.REPEAT_TIME):
             if param is None:
@@ -118,12 +111,6 @@ class FeatureSelector:
         for var in range(len(self.selected_features)):
             X[:, var] = self.X[ self.features[ self.selected_features[var] ] ][:]
         y[:] = self.X[target][:]
-        make_data_standard = False
-        if make_data_standard:
-            scaler=StandardScaler()
-            SX = scaler.fit_transform(X, y)
-        else:
-            SX = X
         X_train, X_test, y_train, y_test = train_test_split(X, y, train_size=self.train_size, shuffle=False)
         Tmodel.fit(X_train,y_train)
         y_pred = Tmodel.predict(X_test)
@@ -139,12 +126,6 @@ class FeatureSelector:
         for var in range(len(self.selected_features)):
             X[:, var] = self.X[ self.features[ self.selected_features[var] ] ][:]
         y[:] = self.X[target][:]
-        make_data_standard = False
-        if make_data_standard:
-            scaler=StandardScaler()
-            SX = scaler.fit_transform(X, y)
-        else:
-            SX = X
         X_train, X_test, y_train, y_test = train_test_split(X, y, train_size=self.train_size, shuffle=False)
         for i in range(self.REPEAT_TIME):
             if self.model is AdaBoostRegressor:
@@ -166,7 +147,7 @@ class FeatureSelector:
                   self.pToBeSelected[feature])      #with probability to be selected.
             
 if __name__ == "__main__": 
-    EstimatorModels = [ AdaBoostRegressor, RandomForestRegressor, GradientBoostingRegressor ] #list of regressors to evaluate
+    EstimatorModels = [ AdaBoostRegressor ] #, RandomForestRegressor, GradientBoostingRegressor ] #list of regressors to evaluate
     train_sizes = [0.5,0.75] #list of training sizes to evaluate
     param_grid = {} #Dictionary with regressor names as keywords and parameter grid as value
     param_grid[AdaBoostRegressor.__name__] = {
