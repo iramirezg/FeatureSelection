@@ -1,27 +1,21 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 # """
-# Created on Fri Nov 19 11:53:47 2021
-
 # @author: iramirezg@mondraon.edu
 
 import pandas as pd
 import numpy as np
-#BEGIN FEATURE SELECTION
+
 from sklearn.datasets import make_regression
 from sklearn.model_selection import train_test_split
 from sklearn.model_selection import GridSearchCV
-from sklearn.tree import DecisionTreeRegressor
+from sklearn.tree import DecisionTreeRegressor #base_estimator__ for AdaBoostRegressor
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.ensemble import GradientBoostingRegressor
 from sklearn.ensemble import AdaBoostRegressor
 from sklearn.preprocessing import StandardScaler
-from sklearn.feature_selection import RFE
-from sklearn.metrics import mean_squared_error
-
-import warnings
-warnings.simplefilter('ignore', category=FutureWarning)
-#warnings.filterwarnings('ignore', category=FutureWarning)
+from sklearn.feature_selection import RFE #Gives the order of elimination and handles recursivity
+from sklearn.metrics import mean_squared_error #MSE
 
 class FeatureSelector:
     def __init__(self,pddf,target=None,anal_feat=None):
@@ -31,7 +25,7 @@ class FeatureSelector:
         self.features = list(self.X.keys())
         self.features.remove(self.target)
         self.anft = list()
-        self.REPEAT_TIME = 2    #Times to repeat FeatureSelection or HyperparameterTuning process.
+        self.REPEAT_TIME = 5    #Times to repeat FeatureSelection or HyperparameterTuning process.
         if anal_feat is not None:
             for feat in anal_feat:
                 if feat in self.X.keys():
@@ -70,7 +64,7 @@ class FeatureSelector:
             SX = scaler.fit_transform(X, y)
         else:
             SX = X
-        X_train, X_test, y_train, y_test = train_test_split(SX, y, train_size=train_size, shuffle=False)
+        X_train, X_test, y_train, y_test = train_test_split(X, y, train_size=train_size, shuffle=False)
         for i in range(self.REPEAT_TIME):
             if param is None:
                 estimator = self.model()
@@ -87,7 +81,6 @@ class FeatureSelector:
             scores.append(ranking)
             max_ranking += max(ranking)
             min_ranking += 1        
-            
         self.pToBeSelected = np.zeros((len(self.features)))
         for feature in self.anft:
             self.selected_features.append(self.features.index(feature))
@@ -106,12 +99,9 @@ class FeatureSelector:
                 n_values += 1
         self.threshold = self.threshold / n_values
         print('threhold : ', self.threshold)
-        #self.threshold = np.mean( [ self.pToBeSelected[self.features.index('Load')],
-        #                 self.pToBeSelected[self.features.index('Moisture in top oil')] ])
-        #print( 'THRESHOLD :' + str(train_size) + ' ' + model.__name__ + ' ' + str(self.threshold))
         for i in range(len(self.features)):
             if self.pToBeSelected[i] >= self.threshold and (i not in self.selected_features):
-                self.selected_features.append(i)  #TODO test > only.
+                self.selected_features.append(i)
         print(model.__name__ + '[' + str(train_size) + ']' + str(len(self.selected_features)))
         
     def TrainModel(self,param=None):
@@ -124,7 +114,6 @@ class FeatureSelector:
             else:
                 estimator = self.model(**param)
             Tmodel = estimator #(**param)
-            #self.param = param
         X, y = make_regression(n_samples=len(self.X), n_features=len(self.selected_features))
         for var in range(len(self.selected_features)):
             X[:, var] = self.X[ self.features[ self.selected_features[var] ] ][:]
@@ -135,7 +124,7 @@ class FeatureSelector:
             SX = scaler.fit_transform(X, y)
         else:
             SX = X
-        X_train, X_test, y_train, y_test = train_test_split(SX, y, train_size=self.train_size, shuffle=False)
+        X_train, X_test, y_train, y_test = train_test_split(X, y, train_size=self.train_size, shuffle=False)
         Tmodel.fit(X_train,y_train)
         y_pred = Tmodel.predict(X_test)
         self.estimator = Tmodel
@@ -156,76 +145,70 @@ class FeatureSelector:
             SX = scaler.fit_transform(X, y)
         else:
             SX = X
-        X_train, X_test, y_train, y_test = train_test_split(SX, y, train_size=self.train_size, shuffle=False)
+        X_train, X_test, y_train, y_test = train_test_split(X, y, train_size=self.train_size, shuffle=False)
         for i in range(self.REPEAT_TIME):
             if self.model is AdaBoostRegressor:
                 estimator = self.model(base_estimator=DecisionTreeRegressor())
             else:
                 estimator = self.model()
-            grid = GridSearchCV(estimator,param_grid,
-                                cv=10,
-                                refit=True,
-                                #scoring='neg_mean_squared_error',
-                                n_jobs=4
-                                )
+            grid = GridSearchCV(estimator,param_grid,cv=10, refit=True)
             grid.fit(X_train,y_train)
             grid_params.append( grid.best_params_ )
-        # print(max(grid_params,
-        #           key=grid_params.count))
         return max(grid_params,key=grid_params.count)
                                                 
     def printANFT(self):
         print(self.anft)
                     
     def printSF(self):
-        print(self.selected_features)
+        print(self.selected_features)   #Print list of selected features, numerical order in CSV
         for feature in self.selected_features:
-            print(self.features[feature], ' p:',
-                  self.pToBeSelected[feature])
+            print(self.features[feature], ' p:',    #Print feature name 
+                  self.pToBeSelected[feature])      #with probability to be selected.
             
 if __name__ == "__main__": 
-    EstimatorModels = [ AdaBoostRegressor, RandomForestRegressor, GradientBoostingRegressor ]
-    train_sizes = [0.5,0.75]
-    param_grid = {}
+    EstimatorModels = [ AdaBoostRegressor, RandomForestRegressor, GradientBoostingRegressor ] #list of regressors to evaluate
+    train_sizes = [0.5,0.75] #list of training sizes to evaluate
+    param_grid = {} #Dictionary with regressor names as keywords and parameter grid as value
     param_grid[AdaBoostRegressor.__name__] = {
-        'n_estimators' : [50,100,500], #[10,50,100,200,500]
-        'base_estimator__min_samples_leaf' : [1,3,5,10,20,50],
-        'base_estimator__max_leaf_nodes' : [None,5,10,50],
+        'n_estimators' : [50,100,200,500],
+        'base_estimator__min_samples_leaf' : [1,3,5,10,20],
+        'base_estimator__max_leaf_nodes' : [None,3,5,10,20,50],
         'base_estimator__max_depth' : [None,3,10,20],
         }
     param_grid[RandomForestRegressor.__name__] = {
-        'n_estimators' : [50,100,200,500], #[10,50,100,200,500]
+        'n_estimators' : [50,100,200,500],
         'min_samples_leaf' : [1,3,5,10,20],
-        'max_leaf_nodes' : [None, 3, 10, 20], #[None,3,5,10,20,50],
-        'max_depth' : [None,3,10,20], #[None,3,5,10,20,50]
+        'max_leaf_nodes' : [None, 3,5, 10, 20,50],
+        'max_depth' : [None,3,10,20],
         }
     param_grid[GradientBoostingRegressor.__name__] = {
-        'n_estimators' : [200,500], #[10,50,100,200,500]
-        'min_samples_leaf' : [1,3,5],  #[1,3,5,10,20],
-        'max_leaf_nodes' : [None,10,20], #[None,3,5,10,20,50]
-        'max_depth' : [None,3,10,20], #[None,3,5,10,20,50]
+        'learning_rate' : [0.5,0.7,0.9,1.0],    #With 1.0 (default) it is not random    
+        'n_estimators' : [50,100,200,500],
+        'min_samples_leaf' : [1,3,5,10,20],
+        'max_leaf_nodes' : [None,3,5,10,20,50],
+        'max_depth' : [None,3,10,20],
         }
     
-    dataframe = pd.read_csv("tmp.csv",parse_dates=['DateTime'])
+    dataframe = pd.read_csv("tmp.csv",parse_dates=['DateTime']) #Load "pseudo-clean" data from CSV file.
     del dataframe['DateTime']  #Meaningless data variable for regression.
     dataframe.loc[:, (dataframe != dataframe.iloc[0]).any()] #Remove constant columns.
     
-    dataframe.dropna(axis='columns',how='any',inplace=True)
+    dataframe.dropna(axis='columns',how='any',inplace=True) #Remove columns with NaN values.
     
-    target = 'TOT' 
-    analytic_features = [ 'Load','Ambient temperature','Moisture in top oil' ] #MDTM
-    #analytic_features = [ 'Load','Ambient temperature' ] #IEC
+    target = 'TOT' #prediction target. Truth value.
+    analytic_features = [ 'Load','Ambient temperature','Moisture in top oil' ] #MDTM analytic features
+    #analytic_features = [ 'Load','Ambient temperature' ] #IEC analytic features
         
-    featSel = FeatureSelector(dataframe,target='TOT',anal_feat=analytic_features)
-    featSel.CorrelationAnalysis()
+    featSel = FeatureSelector(dataframe,target='TOT',anal_feat=analytic_features) #Create FeatureSelector
+    featSel.CorrelationAnalysis() #Do correlation analysis, removes correlated automatically
     for train_s in train_sizes:
         for estimator in EstimatorModels:
             print('TEST ', estimator.__name__, ' train size ', train_s)
-            removedFeatures = featSel.FeatureSelection(train_s,model=estimator)
-            featSel.printSF()
-            model, pred = featSel.TrainModel()
-            params = featSel.HyperparamTune(param_grid[estimator.__name__])
-            print(params)
-            model, pred = featSel.TrainModel(param=params)
-            removedFeatures = featSel.FeatureSelection(train_s,model=estimator,param=params)
-            featSel.printSF()
+            removedFeatures = featSel.FeatureSelection(train_s,model=estimator) #Feature selection
+            featSel.printSF() #Print selected features with probability to be selected (result #1)
+            model, pred = featSel.TrainModel() #Model training
+            params = featSel.HyperparamTune(param_grid[estimator.__name__]) #Get best hyperparameters.
+            print(params) #Print hyperparameters
+            model, pred = featSel.TrainModel(param=params) #Model training
+            removedFeatures = featSel.FeatureSelection(train_s,model=estimator,param=params) #Feature selection with hyperparams
+            featSel.printSF() #Print selected features (may change from previous result #1)
